@@ -26,6 +26,7 @@ package hudson;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.nio.file.Files;
 import org.apache.tools.ant.filters.StringInputStream;
 import org.junit.Test;
 import org.xml.sax.SAXException;
@@ -63,7 +64,7 @@ public class PluginManagerTest {
     @Issue("SECURITY-167")
     @Test
     public void parseInvalidRequestedPlugins() throws Exception {
-        String evilXML = "<?xml version='1.0' encoding='UTF-8'?>\n" +
+        String evilXML = "<?xml version='1.1' encoding='UTF-8'?>\n" +
                 "<!DOCTYPE project[<!ENTITY foo SYSTEM \"file:///\">]>\n" +
                 "<root>\n" +
                 "  <stuff plugin='stuff@1.0'>\n" +
@@ -151,7 +152,7 @@ public class PluginManagerTest {
         FileUtils.write(new File(newFolder, manifestPath), SAMPLE_MANIFEST_FILE);
         
         final File f = new File(tmp.getRoot(), "my.hpi");
-        try(ZipOutputStream out = new ZipOutputStream(new FileOutputStream(f))) {
+        try(ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(f.toPath()))) {
             ZipEntry e = new ZipEntry(manifestPath);
             out.putNextEntry(e);
             byte[] data = SAMPLE_MANIFEST_FILE.getBytes();

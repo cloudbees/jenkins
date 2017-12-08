@@ -67,6 +67,16 @@ import jenkins.util.SystemProperties;
 @ExportedBean
 public class ParametersAction implements RunAction2, Iterable<ParameterValue>, QueueAction, EnvironmentContributingAction, LabelAssignmentAction {
 
+    /**
+     * Three state variable (null, false, true).
+     *
+     * If explicitly set to true, it will keep all variable, explicitly set to
+     * false it will drop all of them (except if they are marked safe).
+     * If null, and they are not safe, it will log a warning in logs to the user
+     * to let him choose the behavior
+     *
+     * @since 2.3
+     */
     @Restricted(NoExternalUse.class)
     public static final String KEEP_UNDEFINED_PARAMETERS_SYSTEM_PROPERTY_NAME = ParametersAction.class.getName() +
             ".keepUndefinedParameters";
@@ -90,7 +100,7 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
     private transient Run<?, ?> run;
 
     public ParametersAction(List<ParameterValue> parameters) {
-        this.parameters = parameters;
+        this.parameters = new ArrayList<>(parameters);
         String paramNames = SystemProperties.getString(SAFE_PARAMETERS_SYSTEM_PROPERTY_NAME);
         safeParameters = new TreeSet<>();
         if (paramNames != null) {
@@ -128,10 +138,11 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
         }
     }
 
-    public void buildEnvVars(AbstractBuild<?,?> build, EnvVars env) {
+    @Override
+    public void buildEnvironment(Run<?,?> run, EnvVars env) {
         for (ParameterValue p : getParameters()) {
             if (p == null) continue;
-            p.buildEnvironment(build, env); 
+            p.buildEnvironment(run, env);
         }
     }
 
@@ -306,7 +317,8 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
             return parameters;
         }
 
-        if (SystemProperties.getBoolean(KEEP_UNDEFINED_PARAMETERS_SYSTEM_PROPERTY_NAME)) {
+        Boolean shouldKeepFlag = SystemProperties.optBoolean(KEEP_UNDEFINED_PARAMETERS_SYSTEM_PROPERTY_NAME);
+        if (shouldKeepFlag != null && shouldKeepFlag.booleanValue()) {
             return parameters;
         }
 
@@ -315,10 +327,10 @@ public class ParametersAction implements RunAction2, Iterable<ParameterValue>, Q
         for (ParameterValue v : this.parameters) {
             if (this.parameterDefinitionNames.contains(v.getName()) || isSafeParameter(v.getName())) {
                 filteredParameters.add(v);
-            } else {
+            } else if (shouldKeepFlag == null) {
                 LOGGER.log(Level.WARNING, "Skipped parameter `{0}` as it is undefined on `{1}`. Set `-D{2}=true` to allow "
                         + "undefined parameters to be injected as environment variables or `-D{3}=[comma-separated list]` to whitelist specific parameter names, "
-                        + "even though it represents a security breach",
+                        + "even though it represents a security breach or `-D{2}=false` to no longer show this message.",
                         new Object [] { v.getName(), run.getParent().getFullName(), KEEP_UNDEFINED_PARAMETERS_SYSTEM_PROPERTY_NAME, SAFE_PARAMETERS_SYSTEM_PROPERTY_NAME });
             }
         }
